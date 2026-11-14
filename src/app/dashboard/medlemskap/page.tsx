@@ -29,25 +29,34 @@ export default function MembershipPage({ searchParams }: PageProps<"/dashboard/m
 const first = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
 
 async function MembershipLoader({ searchParams }: Pick<PageProps<"/dashboard/medlemskap">, "searchParams">) {
-  const [query, { supabase }, initial] = await Promise.all([searchParams, requireUser(), getOrganizations()]);
-  let organizations = initial;
+  const [query, { supabase }] = await Promise.all([searchParams, requireUser()]);
 
   // Back from Stripe Checkout: activate straight away rather than waiting for the webhook.
+  // This must happen BEFORE the organizations are read. Identical requests are
+  // answered once per page render, so reading them first and again after the
+  // sync would hand back the state from before the payment.
   const sessionId = first(query.session_id);
-  let justPaid: Organization | undefined;
+  let paidFor: string | null = null;
   if (first(query.betalt) === "1" && sessionId && isBillingConfigured()) {
     try {
-      const paidFor = await syncCheckoutSession(sessionId);
-      // Only confirm for an organization the signed-in user actually belongs to.
-      if (paidFor && organizations.some((o) => o.id === paidFor)) {
-        const { data } = await supabase.from("organizations").select("*").order("created_at", { ascending: true });
-        if (data) organizations = data as Organization[];
-        justPaid = organizations.find((o) => o.id === paidFor);
-      }
+      paidFor = await syncCheckoutSession(sessionId);
     } catch (error) {
       // The webhook will still activate the membership; the page just shows the current state.
       console.error("Kunne ikke bekrefte betalingen ved retur fra Stripe:", error);
     }
+  }
+
+  let organizations = await getOrganizations();
+  let justPaid: Organization | undefined;
+  // Only confirm for an organization the signed-in user actually belongs to (RLS decides what this returns).
+  if (paidFor && organizations.some((o) => o.id === paidFor)) {
+    // A request of its own, so it cannot be answered with an earlier read of the list.
+    const { data } = await supabase.from("organizations").select("*").eq("id", paidFor).maybeSingle();
+    if (data) {
+      const fresh = data as Organization;
+      organizations = organizations.map((o) => (o.id === fresh.id ? fresh : o));
+    }
+    justPaid = organizations.find((o) => o.id === paidFor);
   }
 
   if (organizations.length === 0) {
@@ -78,7 +87,7 @@ async function MembershipLoader({ searchParams }: Pick<PageProps<"/dashboard/med
           </Link>
         </div>
       )}
-      {first(query.betalt) === "1" && !justPaid && (
+      {first(query.betalt) === "1" && !(justPaid && hasAccess(justPaid)) && (
         <Notice>
           Betalingen behandles. Medlemskapet blir aktivt i løpet av kort tid. Last inn siden på nytt om et øyeblikk.
         </Notice>
