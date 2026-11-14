@@ -7,6 +7,12 @@ export interface Organization {
   name: string;
   plan: "free" | "pro";
   created_at: string;
+  /** Membership columns are missing until the 20261114000000_membership migration has run. */
+  stripe_customer_id?: string | null;
+  stripe_subscription_id?: string | null;
+  subscription_status?: string | null;
+  access_until?: string | null;
+  cancel_at_period_end?: boolean;
 }
 
 export interface EventRow {

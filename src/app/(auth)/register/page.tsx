@@ -10,8 +10,8 @@ export const metadata: Metadata = { title: "Opprett konto" };
 export default function RegisterPage() {
   return (
     <AuthCard
-      title="Kom i gang gratis"
-      subtitle="Opprett ditt første arrangement på et par minutter."
+      title="Opprett konto"
+      subtitle="Medlemskap koster 499 kr per år for organisasjonen. Deltakerne betaler ingenting."
       footer={
         <>
           Har du allerede konto?{" "}

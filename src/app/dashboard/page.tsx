@@ -7,8 +7,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { InstallPrompt } from "@/components/install-prompt";
 import { getOrganizations, requireUser } from "@/lib/auth";
 import { formatEventDate } from "@/lib/format";
+import { hasAccess } from "@/lib/membership";
 import { cn } from "@/lib/utils";
+import { isBillingConfigured } from "@/server/billing";
 import { getEventSummaries, type EventSummary } from "@/server/dashboard";
+import { MembershipCard } from "./medlemskap/membership-card";
 import { Onboarding } from "./onboarding";
 
 export const metadata: Metadata = { title: "Arrangementer" };
@@ -26,11 +29,14 @@ async function DashboardHome() {
 
   if (organizations.length === 0) {
     const suggested = typeof user.user_metadata?.organization_name === "string" ? user.user_metadata.organization_name : "";
-    return <Onboarding defaultName={suggested} />;
+    // With Stripe set up, a new organizer goes straight from naming the organization to paying for it.
+    return <Onboarding defaultName={suggested} payment={isBillingConfigured()} />;
   }
 
   const events = await getEventSummaries();
   const multipleOrgs = organizations.length > 1;
+  const withoutAccess = organizations.filter((o) => !hasAccess(o));
+  const canCreate = withoutAccess.length < organizations.length;
 
   return (
     <div className="space-y-6">
@@ -39,15 +45,30 @@ async function DashboardHome() {
           <p className="text-sm font-medium text-primary">{multipleOrgs ? "Dine organisasjoner" : organizations[0].name}</p>
           <h1 className="text-2xl font-bold tracking-tight">Arrangementer</h1>
         </div>
-        <Link href="/dashboard/events/new" className={cn(buttonVariants({ size: "lg" }), "hidden sm:inline-flex")}>
-          <Plus /> Nytt arrangement
-        </Link>
+        {canCreate && (
+          <Link href="/dashboard/events/new" className={cn(buttonVariants({ size: "lg" }), "hidden sm:inline-flex")}>
+            <Plus /> Nytt arrangement
+          </Link>
+        )}
       </div>
 
       <InstallPrompt />
 
+      {withoutAccess.length > 0 && (
+        <div className="space-y-3">
+          <p className="font-medium">
+            {canCreate
+              ? "Disse organisasjonene mangler medlemskap og kan ikke lage nye arrangementer:"
+              : "Dere trenger et medlemskap for å lage arrangementer."}
+          </p>
+          {withoutAccess.map((organization) => (
+            <MembershipCard key={organization.id} organization={organization} showName={multipleOrgs} />
+          ))}
+        </div>
+      )}
+
       {events.length === 0 ? (
-        <EmptyEvents />
+        canCreate && <EmptyEvents />
       ) : multipleOrgs ? (
         organizations.map((org) => {
           const own = events.filter((e) => e.organization_id === org.id);
@@ -62,12 +83,11 @@ async function DashboardHome() {
         <EventList events={events} />
       )}
 
-      <Link
-        href="/dashboard/events/new"
-        className={cn(buttonVariants({ size: "xl" }), "w-full sm:hidden")}
-      >
-        <Plus /> Nytt arrangement
-      </Link>
+      {canCreate && (
+        <Link href="/dashboard/events/new" className={cn(buttonVariants({ size: "xl" }), "w-full sm:hidden")}>
+          <Plus /> Nytt arrangement
+        </Link>
+      )}
     </div>
   );
 }

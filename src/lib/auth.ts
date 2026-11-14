@@ -17,7 +17,8 @@ export const getOrganizations = cache(async (): Promise<Organization[]> => {
   const { supabase } = await requireUser();
   const { data, error } = await supabase
     .from("organizations")
-    .select("id, name, plan, created_at")
+    // "*" rather than a column list: the membership columns may not exist yet (20261114000000 migration).
+    .select("*")
     .order("created_at", { ascending: true });
   if (error) throw error;
   return (data ?? []) as Organization[];

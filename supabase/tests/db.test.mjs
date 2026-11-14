@@ -81,6 +81,10 @@ let orgId, eventId, token, cakeId, waffleId, coffeeId;
 await test("organizer creates organization, event and items", async () => {
   await as("authenticated", U1, async () => {
     orgId = (await one(`select public.create_organization('Solberg skolekorps') as id`)).id;
+  });
+  // New events require a paid membership (20261114000000_membership); the tests below run as a paying organization.
+  await db.query(`update public.organizations set access_until = now() + interval '1 year' where id = $1`, [orgId]);
+  await as("authenticated", U1, async () => {
     const ev = await one(
       `insert into public.events (organization_id, title, event_date) values ($1, 'Loppemarked', '2027-04-24') returning id, public_token`,
       [orgId],
@@ -493,6 +497,68 @@ await test("share link opens open and closed events, but not archived ones or ol
   });
   assert.equal(await publicEvent(shareToken), null);
   assert.equal((await publicEvent(newToken)).title, "Sommerkonsert");
+});
+
+await test("membership: only paying organizations can create events, and only the server can grant access", async () => {
+  let freeOrg, oldEventId;
+  await as("authenticated", U2, async () => {
+    freeOrg = (await one(`select public.create_organization('Uten medlemskap') as id`)).id;
+    assert.equal((await one(`select access_until from public.organizations where id = $1`, [freeOrg])).access_until, null);
+    // No membership: creating an event is refused by the database itself, not just by the app.
+    await rejects(q(`insert into public.events (organization_id, title) values ($1, 'Gratis')`, [freeOrg]), "row-level security");
+    // An organizer cannot hand out access or a subscription to their own organization.
+    await rejects(
+      q(`update public.organizations set access_until = now() + interval '10 years' where id = $1`, [freeOrg]),
+      "permission denied",
+    );
+    await rejects(q(`update public.organizations set subscription_status = 'active' where id = $1`, [freeOrg]), "permission denied");
+    await rejects(q(`update public.organizations set stripe_customer_id = 'cus_x' where id = $1`, [freeOrg]), "permission denied");
+  });
+
+  // The server (Stripe webhook, service role) activates the membership.
+  await as("service_role", null, async () => {
+    await q(
+      `update public.organizations
+          set access_until = now() + interval '1 year', subscription_status = 'active',
+              stripe_customer_id = 'cus_test', stripe_subscription_id = 'sub_test', plan = 'pro'
+        where id = $1`,
+      [freeOrg],
+    );
+  });
+  await as("authenticated", U2, async () => {
+    oldEventId = (await one(`insert into public.events (organization_id, title) values ($1, 'Betalt') returning id`, [freeOrg])).id;
+  });
+
+  // Just expired: three days of slack while Stripe collects the renewal.
+  await db.query(`update public.organizations set access_until = now() - interval '1 day' where id = $1`, [freeOrg]);
+  await as("authenticated", U2, async () => {
+    await q(`insert into public.events (organization_id, title) values ($1, 'Innenfor fristen')`, [freeOrg]);
+  });
+
+  // Expired for real: no new events, but the existing ones can still be read, changed and filled with items.
+  await db.query(`update public.organizations set access_until = now() - interval '4 days' where id = $1`, [freeOrg]);
+  await as("authenticated", U2, async () => {
+    await rejects(q(`insert into public.events (organization_id, title) values ($1, 'Utløpt')`, [freeOrg]), "row-level security");
+    const upd = await db.query(`update public.events set title = 'Betalt (endret)' where id = $1`, [oldEventId]);
+    assert.equal(upd.affectedRows, 1);
+    await q(`insert into public.items (event_id, name, target_quantity, unit) values ($1, 'Kake', 2, 'stk')`, [oldEventId]);
+    assert.equal((await q(`select id from public.events where organization_id = $1`, [freeOrg])).length, 2);
+  });
+  // ...and the share link of an existing event keeps working for participants.
+  const oldToken = (await one(`select public_token from public.events where id = $1`, [oldEventId])).public_token;
+  await as("service_role", null, async () => {
+    assert.equal((await one(`select public.get_public_event($1) as e`, [oldToken])).e.title, "Betalt (endret)");
+  });
+
+  // Anonymous visitors cannot ask who has paid.
+  await as("anon", null, async () => {
+    await rejects(q(`select public.org_has_access($1)`, [freeOrg]), "permission denied");
+  });
+
+  // The migration is additive and can be run again without touching the membership data.
+  const before = await one(`select access_until, stripe_customer_id, plan from public.organizations where id = $1`, [freeOrg]);
+  await db.exec(readFileSync(join(migrationsDir, "20261114000000_membership.sql"), "utf8"));
+  assert.deepEqual(await one(`select access_until, stripe_customer_id, plan from public.organizations where id = $1`, [freeOrg]), before);
 });
 
 await test("seed data loads", async () => {

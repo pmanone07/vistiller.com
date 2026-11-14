@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { Building2, Loader2, LogOut, Plus, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -33,8 +34,11 @@ export function SettingsView({ email, organizations }: { email: string; organiza
           Innlogget som <span className="font-medium">{email}</span>
         </p>
         <p className="text-sm text-muted-foreground">
-          Abonnement: <span className="font-medium text-foreground">Gratis</span>. Flere administratorer, påminnelser
-          og eksport kommer i betalte planer.
+          Betaling og oppsigelse finner du under{" "}
+          <Link href="/dashboard/medlemskap" className="font-medium text-primary hover:underline">
+            Medlemskap
+          </Link>
+          .
         </p>
         <Button variant="outline" size="lg" disabled={pending} onClick={() => startTransition(() => signOut())}>
           {pending ? <Loader2 className="animate-spin" /> : <LogOut />} Logg ut

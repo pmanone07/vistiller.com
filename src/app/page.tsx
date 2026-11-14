@@ -151,14 +151,14 @@ export default function HomePage() {
             </p>
             <div className="flex flex-col gap-3 sm:flex-row">
               <Link href="/register" className={buttonVariants({ size: "xl" })}>
-                Opprett gratis arrangement <ArrowRight />
+                Kom i gang <ArrowRight />
               </Link>
               <a href="#slik-fungerer-det" className={buttonVariants({ size: "xl", variant: "outline" })}>
                 Se hvordan det fungerer
               </a>
             </div>
             <ul className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
-              {["Ingen konto for deltakere", "Ingen app å installere", "Gratis å komme i gang"].map((t) => (
+              {["Ingen konto for deltakere", "Ingen app å installere", "Gratis for deltakere, 499 kr per år for arrangøren"].map((t) => (
                 <li key={t} className="inline-flex items-center gap-1.5">
                   <CheckCircle2 className="size-4 text-success" /> {t}
                 </li>
@@ -284,7 +284,7 @@ export default function HomePage() {
               href="/register"
               className={cn(buttonVariants({ size: "xl", variant: "secondary" }), "mt-6 bg-white text-primary hover:bg-white/90")}
             >
-              Opprett gratis arrangement <ArrowRight />
+              Kom i gang <ArrowRight />
             </Link>
           </div>
         </section>

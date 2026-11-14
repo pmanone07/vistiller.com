@@ -7,10 +7,12 @@ import { ArrowRight, Loader2, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MEMBERSHIP } from "@/lib/membership";
 import { createOrganization } from "./actions";
+import { startCheckout } from "./medlemskap/actions";
 
 /** First step after signup: name the organization (team, class, association …). */
-export function Onboarding({ defaultName }: { defaultName: string }) {
+export function Onboarding({ defaultName, payment = false }: { defaultName: string; payment?: boolean }) {
   const router = useRouter();
   const [name, setName] = useState(defaultName);
   const [error, setError] = useState<string>();
@@ -23,6 +25,16 @@ export function Onboarding({ defaultName }: { defaultName: string }) {
       const result = await createOrganization(name);
       if (!result.ok) {
         setError(result.error);
+        return;
+      }
+      if (payment) {
+        // Straight on to Stripe Checkout; the action redirects there when it succeeds.
+        const checkout = await startCheckout(result.data.id);
+        if (checkout && !checkout.ok) {
+          // The organization exists, so let the organizer pay from the membership page instead.
+          toast.error(checkout.error);
+          router.push("/dashboard/medlemskap");
+        }
         return;
       }
       toast.success("Da er dere i gang!");
@@ -57,8 +69,13 @@ export function Onboarding({ defaultName }: { defaultName: string }) {
         </div>
         <Button type="submit" size="xl" className="w-full" disabled={pending}>
           {pending ? <Loader2 className="animate-spin" /> : null}
-          Fortsett <ArrowRight />
+          {payment ? "Fortsett til betaling" : "Fortsett"} <ArrowRight />
         </Button>
+        {payment && (
+          <p className="text-center text-sm text-muted-foreground">
+            Medlemskapet koster {MEMBERSHIP.priceLabel} og betales trygt med kort hos Stripe.
+          </p>
+        )}
       </form>
     </div>
   );

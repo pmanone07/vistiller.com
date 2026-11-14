@@ -16,7 +16,7 @@ export default function LoginPage() {
         <>
           Ny her?{" "}
           <Link href="/register" className="font-medium text-primary hover:underline">
-            Opprett gratis konto
+            Opprett konto
           </Link>
         </>
       }

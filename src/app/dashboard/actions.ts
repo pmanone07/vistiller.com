@@ -6,6 +6,7 @@ import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { dbErrorMessage } from "@/lib/errors";
 import { EVENT_TYPE_VALUES, ITEM_KIND_VALUES } from "@/lib/kinds";
+import { hasAccess } from "@/lib/membership";
 import { findTemplate, type EventTemplate } from "@/lib/templates";
 import type { ActionResult } from "@/lib/types";
 
@@ -36,6 +37,8 @@ const fail = (error: { message?: string; details?: string | null; code?: string 
 const isMissingColumn = (error: { code?: string } | null) => error?.code === "PGRST204" || error?.code === "42703";
 const NEEDS_MIGRATION =
   "Dette krever en oppdatering av databasen som ikke er kjørt ennå. Kontakt den som drifter ViStiller.";
+
+const NEEDS_MEMBERSHIP = "Organisasjonen må ha et aktivt medlemskap for å lage arrangementer.";
 
 const uuid = z.uuid();
 const optionalText = (max: number) =>
@@ -108,6 +111,10 @@ export async function createEvent(
   if (!uuid.safeParse(organizationId).success) return { ok: false, error: "Velg organisasjon." };
 
   const { supabase } = await requireUser();
+  // The database enforces this too (restrictive RLS policy); checking here gives a clear message.
+  const { data: organization } = await supabase.from("organizations").select("*").eq("id", organizationId).maybeSingle();
+  if (!organization) return { ok: false, error: "Velg organisasjon." };
+  if (!hasAccess(organization)) return { ok: false, error: NEEDS_MEMBERSHIP };
   const { event_type, ...base } = parsed.data;
   const row: Record<string, unknown> = { organization_id: organizationId, ...base };
   let { data, error } = await supabase

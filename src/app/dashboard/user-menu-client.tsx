@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { LogOut, Settings } from "lucide-react";
+import { CreditCard, LogOut, Settings } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,6 +34,9 @@ export function UserMenuClient({ email }: { email: string }) {
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => router.push("/dashboard/settings")}>
           <Settings /> Innstillinger
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => router.push("/dashboard/medlemskap")}>
+          <CreditCard /> Medlemskap
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => startTransition(() => signOut())}>
           <LogOut /> Logg ut
