@@ -171,3 +171,15 @@
     font-size: max(16px, 1em);
   }
 }
+
+/* Landing page (StickyPages): a stacked page cannot scroll, so its content has
+   to fit the screen. On screens too short for the layout at that width, turn
+   the stacking off and let the pages scroll normally instead of being cut off. */
+@media (max-width: 639px) and (max-height: 659px),
+  (min-width: 640px) and (max-width: 1023px) and (max-height: 719px),
+  (min-width: 1024px) and (max-height: 639px) {
+  .sticky-pages-fit > div {
+    position: static !important;
+    height: auto !important;
+  }
+}
